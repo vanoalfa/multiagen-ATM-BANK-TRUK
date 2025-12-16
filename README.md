@@ -10,6 +10,7 @@ Proyek ini mensimulasikan interaksi beberapa agen: ATM, Bank, Truk pengisi uang,
 - Penundaan komunikasi (`delayKomunikasi`) terpusat di `common.py`.
 - Nasabah berhenti menarik saat ATM dalam status offline (menunggu isi ulang) dan kembali menarik saat online.
 - Pemilihan hari/waktu simulasi via argumen CLI.
+- Evaluasi log komunikasi disediakan melalui `evaluasi.py`.
 
 ## Prasyarat
 - Python 3.10+ (disarankan).
@@ -41,9 +42,59 @@ Simulasi berhenti otomatis ketika:
 
 ## Logging
 - Log pesan agen dicatat di direktori `logs/` (lihat `log.json` atau `logs/messages.log` jika tersedia).
-## Dataset
-Dataset yang digunakan diambil dari: https://www.kaggle.com/datasets/zoya77/atm-cash-demand-forecasting-and-management
+
+## Evaluasi
+- Jalankan evaluasi dari log:
+  ```bash
+  python evaluasi.py --log logs/messages.log --output logs/evaluasi.json
+  ```
+- Ringkasan yang dihitung:
+  - **Total pesan**: jumlah seluruh pesan yang tercatat.
+  - **Distribusi performative**: hitungan per jenis performative (inform/request/agree/dll).
+  - **Distribusi pengirim**: hitungan pesan per agen pengirim.
+  - **Latensi per percakapan (makespan percakapan)**: durasi per `conversation_id`, dihitung dari timestamp pesan pertama hingga pesan terakhir dalam percakapan itu (berapa lama satu percakapan berlangsung).
+  - **Response time**: selisih antara pesan pertama dan pesan kedua pada percakapan yang sama (perkiraan waktu respon awal terhadap sebuah permintaan).
+  - **Total makespan simulasi**: durasi global dari pesan pertama yang tercatat hingga pesan terakhir (lama keseluruhan komunikasi yang terekam di log).
+  - **Reassign count**: jumlah pesan dengan performative `reassign` (misal skenario pengalihan tugas/sumber daya).
+  - **Failure count & failure rate**: banyaknya pesan performative `failure` dan persentasenya terhadap total pesan.
+  - **Recovery time**: pada percakapan yang mengalami `failure`, selisih waktu dari pesan failure ke pesan non-failure pertama berikutnya (indikasi seberapa cepat pulih).
+
+Contoh hasil (cuplikan keluaran terminal / evaluasi.json):
+```json
+{
+  "total_messages": 1434,
+  "by_performative": {
+    "inform": 1434
+  },
+  "by_sender": {
+    "atm1@localhost": 970,
+    "bank1@localhost": 464
+  },
+  "latency_per_conversation_seconds": {
+    "count": 1005,
+    "min": 0.0,
+    "max": 1.6315698623657227,
+    "avg": 0.02432077488495936
+  },
+  "response_time_seconds": {
+    "count": 429,
+    "min": 0.01328587532043457,
+    "max": 1.6315698623657227,
+    "avg": 0.05697524186336633
+  },
+  "total_makespan_seconds": 17996.079337120056,
+  "failure_count": 0,
+  "failure_rate": 0.0,
+  "reassign_count": 0,
+  "recovery_time_after_failure_seconds": {
+    "count": 0,
+    "min": 0,
+    "max": 0,
+    "avg": 0
+  }
+}
+```
+
 ## Lisensi
 Gunakan sesuai kebutuhan akademik/tugas
-
 
