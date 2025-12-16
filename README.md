@@ -41,7 +41,9 @@ Simulasi berhenti otomatis ketika:
 
 ## Logging
 - Log pesan agen dicatat di direktori `logs/` (lihat `log.json` atau `logs/messages.log` jika tersedia).
-
+## Dataset
+Dataset yang digunakan diambil dari: https://www.kaggle.com/datasets/zoya77/atm-cash-demand-forecasting-and-management
 ## Lisensi
-Gunakan sesuai kebutuhan akademik/tugas. Tidak ada jaminan.***
+Gunakan sesuai kebutuhan akademik/tugas
+
 
