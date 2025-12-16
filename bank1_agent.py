@@ -1,138 +1,120 @@
-import json, time, asyncio
+import json
+import asyncio
 from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
 from spade.message import Message
-from common import save_log
+from common import save_log, delayKomunikasi
 
-# Mapping antara ID eksternal dan JID asli
-TRUCK_MAP = {
-    "TRUK-001": "truk1@localhost"
-}
+TRUCK_JID = "truk1@localhost"
 
-class Bank1(Agent):
+class Bank(Agent):
     class Dispatcher(CyclicBehaviour):
+        async def send_with_delay(self, message):
+            await asyncio.sleep(delayKomunikasi)
+            await self.send(message)
+
         async def run(self):
-            msg = await self.receive(timeout=10)
+            msg = await self.receive(timeout=5)
             if not msg:
                 return
-            perf = msg.metadata.get("performative")
-            conv = msg.metadata.get("conversation-id")
+
             content = json.loads(msg.body)
+            conv = msg.metadata.get("conversation-id")
+            sender = str(msg.sender)
 
-            # === 1) availability inquiry ===
-            if perf == "request" and content.get("type") == "availability_inquiry":
-                print(f"Bank1 <- {msg.sender}: request (availability_inquiry, jumlah={content['jumlah']})")
-                save_log(str(self.agent.jid), str(msg.sender), "request(received)", content, conv)
+            #Pesan dari ATM
+            if content.get("type") == "availability_inquiry":
+                print(f"BANK1 <- ATM1 | Menerima permintaan isi ulang")
+                probe = Message(to=TRUCK_JID, body=json.dumps({"type": "probe"}))
+                probe.set_metadata("performative", "query-if")
+                probe.set_metadata("conversation-id", conv)
+                await self.send_with_delay(probe)
+                print(f"BANK1 -> TRUK1 | Cek ketersediaan truk")
 
-                opsi = []
-                for truck_id, truck_jid in TRUCK_MAP.items():
-                    q = Message(to=truck_jid, body=json.dumps({"type": "probe_capacity"}))
-                    q.set_metadata("performative", "query-if")
-                    q.set_metadata("conversation-id", conv)
-                    await self.send(q)
-                    print(f"Bank1 -> {truck_id}: query-if (probe_capacity)")
-
-                    r = await self.receive(timeout=3)
-                    if r:
-                        rc = json.loads(r.body)
-                        opsi.append({
-                            "truck_id": truck_id,  # pakai ID eksternal
-                            "estimasi_epoch": int(time.time()) + 1800,
-                            "biaya_operasional": rc["biaya_operasional"],
-                            "kapasitas_sisa": rc["kapasitas_sisa"],
-                            "status": "tersedia" if rc["kapasitas_sisa"] >= content["jumlah"] else "penuh"
-                        })
-                        print(f"Bank1 <- {truck_id}: inform (kapasitas={rc['kapasitas_sisa']})")
+                # Tunggu response dari truk
+                r = await self.receive(timeout=5)
+                if not r:
+                    print(f"BANK1 | Timeout menunggu response dari TRUK1")
+                    return
+                
+                # Verifikasi bahwa message dari truk dan untuk conversation ini
+                if (str(r.sender) != TRUCK_JID or 
+                    r.metadata.get("conversation-id") != conv):
+                    print(f"BANK1 | Menerima message yang tidak sesuai, mengabaikan")
+                    return
+                
+                rc = json.loads(r.body)
+                print(f"BANK1 <- TRUK1 | Kapasitas: {rc['kapasitas']:,}")
 
                 reply = {
-                    "type": "options",
-                    "bank_id": "BANK1",
-                    "opsi": opsi
+                    "opsi": [{
+                        "truck_id": "TRUK-001",
+                        "kapasitas": rc["kapasitas"],
+                        "status": "tersedia"
+                    }]
                 }
-                m = Message(to=str(msg.sender), body=json.dumps(reply))
-                m.set_metadata("performative", "inform")
-                m.set_metadata("conversation-id", conv)
-                await self.send(m)
-                print(f"Bank1 -> {msg.sender}: inform (opsi truk dikirim)")
-                save_log(str(self.agent.jid), str(msg.sender), "inform", reply, conv)
 
-            # === 2) booking_request ===
-            if perf == "request" and content.get("type") == "booking_request":
-                truck_id = content["truck_id"]
-                jumlah = content["jumlah"]
-                print(f"Bank1 <- {msg.sender}: request (booking_request, jumlah={jumlah}, truck={truck_id})")
-                save_log(str(self.agent.jid), str(msg.sender), "request(received)", content, conv)
+                out = Message(to=str(msg.sender), body=json.dumps(reply))
+                out.set_metadata("performative", "inform")
+                out.set_metadata("conversation-id", conv)
+                await self.send_with_delay(out)
+                print(f"BANK1 -> ATM1 | Mengirim opsi truk tersedia")
 
-                # mapping truck_id ke JID
-                truck_jid = TRUCK_MAP.get(truck_id, None)
-                if not truck_jid:
-                    print(f"Bank1: ERROR, truck_id {truck_id} tidak dikenal.")
-                    return
+                save_log(self.agent.jid, msg.sender, "inform", reply, conv)
 
-                req = {
-                    "type": "allocate",
-                    "jumlah": jumlah,
-                    "jenis_layanan": content["jenis_layanan"]
-                }
-                m = Message(to=truck_jid, body=json.dumps(req))
-                m.set_metadata("performative", "request")
-                m.set_metadata("conversation-id", conv)
-                await self.send(m)
-                print(f"Bank1 -> {truck_id}: request (allocate, jumlah={jumlah})")
+            #Booking request dari atm
+            if content.get("type") == "booking_request":
+                print(f"BANK1 <- ATM1 | Menerima booking request")
+                alloc = Message(
+                    to=TRUCK_JID,
+                    body=json.dumps({
+                        "type": "allocate",
+                        "jumlah": content["jumlah"]
+                    })
+                )
+                alloc.set_metadata("performative", "request")
+                alloc.set_metadata("conversation-id", conv)
+                await self.send_with_delay(alloc)
+                print(f"BANK1 -> TRUK1 | Alokasi uang: {content['jumlah']:,}")
 
+                # Tunggu response dari truk
                 r = await self.receive(timeout=5)
-                if r:
-                    rc = json.loads(r.body)
-                    if r.metadata.get("performative") == "agree":
-                        result = {
-                            "type": "booking_result",
-                            "booking_id": f"BK-{int(time.time())}",
-                            "status": "konfirmasi",
-                            "ringkasan": {
-                                "truck_id": truck_id,
-                                "estimasi_epoch": int(time.time()) + 1800,
-                                "biaya_operasional": rc["biaya_operasional"]
-                            }
-                        }
-                        out = Message(to=str(msg.sender), body=json.dumps(result))
-                        out.set_metadata("performative", "confirm")
-                        out.set_metadata("conversation-id", conv)
-                        await self.send(out)
-                        print(f"Bank1 -> {msg.sender}: confirm (booking berhasil dengan {truck_id})")
-                        print("Tujuan sudah tercapai. Proses komunikasi selesai (Bank1).")
-                        save_log(str(self.agent.jid), str(msg.sender), "confirm", result, conv)
-                        await self.agent.stop()
-
-                    else:
-                        result = {
-                            "type": "booking_result",
-                            "booking_id": f"BK-{int(time.time())}",
-                            "status": "gagal",
-                            "alasan": rc.get("alasan", "truk tidak tersedia"),
-                            "alternatif": []
-                        }
-                        out = Message(to=str(msg.sender), body=json.dumps(result))
-                        out.set_metadata("performative", "disconfirm")
-                        out.set_metadata("conversation-id", conv)
-                        await self.send(out)
-                        print(f"Bank1 -> {msg.sender}: disconfirm (booking gagal, alasan={result['alasan']})")
-                        print("Tujuan sudah tercapai. Proses komunikasi selesai (Bank1).")
-                        save_log(str(self.agent.jid), str(msg.sender), "disconfirm", result, conv)
-                        await self.agent.stop()
+                if not r:
+                    print(f"BANK1 | Timeout menunggu response dari TRUK1")
+                    return
+                
+                # Verifikasi bahwa message dari truk dan untuk conversation ini
+                if (str(r.sender) != TRUCK_JID or 
+                    r.metadata.get("conversation-id") != conv):
+                    print(f"BANK1 | Menerima message yang tidak sesuai, mengabaikan")
+                    return
+                
+                # Kirim konfirmasi ke ATM
+                out = Message(to=str(msg.sender), body=r.body)
+                out.set_metadata("performative", "confirm")
+                out.set_metadata("conversation-id", conv)
+                await self.send_with_delay(out)
+                print(f"BANK1 -> ATM1 | Konfirmasi booking")
+                
+                # Instruksikan TRUCK untuk mengisi ulang ATM
+                rc_content = json.loads(r.body)
+                refill_msg = Message(
+                    to=TRUCK_JID,
+                    body=json.dumps({
+                        "type": "refill_atm",
+                        "atm_jid": str(msg.sender),
+                        "jumlah": content["jumlah"]
+                    })
+                )
+                refill_msg.set_metadata("performative", "request")
+                refill_msg.set_metadata("conversation-id", conv)
+                await self.send_with_delay(refill_msg)
+                print(f"BANK1 -> TRUK1 | Instruksi mengisi ulang ATM: {content['jumlah']:,}")
 
     async def setup(self):
         self.add_behaviour(self.Dispatcher())
 
-# === main entry ===
-async def main():
-    a = Bank1("bank1@localhost", "1234")
-    await a.start()
-    try:
-        while a.is_alive():
-            await asyncio.sleep(1)
-    except KeyboardInterrupt:
-        print("KeyboardInterrupt, stopping agent...")
-    await a.stop()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+#agar sesuai dengan import di main.py
+class Bank1(Bank):
+    pass
