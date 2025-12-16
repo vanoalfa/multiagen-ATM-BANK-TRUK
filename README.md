@@ -95,6 +95,41 @@ Contoh hasil (cuplikan keluaran terminal / evaluasi.json):
 }
 ```
 
+Penjelasan contoh hasil di atas:
+- **"total_messages": 1434**  
+  Artinya selama simulasi tercatat 1434 pesan yang dikirim antar agen.
+
+- **"by_performative": {"inform": 1434}**  
+  Semua pesan yang terekam menggunakan performative `inform` (tidak ada `request`, `agree`, dll yang tercatat oleh logger saat ini).
+
+- **"by_sender": {"atm1@localhost": 970, "bank1@localhost": 464}**  
+  - ATM mengirim 970 pesan (misalnya balasan ke Nasabah, permintaan/log ke Bank, konfirmasi ke Truk).  
+  - Bank mengirim 464 pesan (misalnya probe ke Truk, opsi ke ATM, konfirmasi booking, instruksi refill).
+
+- **"latency_per_conversation_seconds"**  
+  - `"count": 1005` → ada 1005 percakapan (berbasis `conversation_id`) yang dianalisis.  
+  - `"min": 0.0` → percakapan tercepat selesai instan (semua pesan waktu yang sama atau hanya 1 pesan).  
+  - `"max": 1.63...` → percakapan paling lama membutuhkan sekitar 1,63 detik dari pesan pertama hingga terakhir.  
+  - `"avg": 0.0243...` → rata-rata satu percakapan selesai dalam ~0,024 detik (24 ms), menunjukkan komunikasi antar agen cukup cepat.
+
+- **"response_time_seconds"**  
+  - `"count": 429` → hanya 429 percakapan yang punya minimal 2 pesan (sehingga response time bisa dihitung).  
+  - `"min": 0.0132...` → respon tercepat hanya sekitar 0,013 detik (13 ms) setelah pesan pertama.  
+  - `"max": 1.63...` → respon paling lambat sekitar 1,63 detik.  
+  - `"avg": 0.0569...` → rata-rata waktu respon awal sekitar 0,056 detik (56 ms).
+
+- **"total_makespan_seconds": 17996.0793...**  
+  Durasi total simulasi (dari pesan pertama yang tercatat sampai pesan terakhir) sekitar 17.996 detik (~5 jam jika log berasal dari beberapa sesi, atau ~5 jam waktu simulasi/eksekusi).
+
+- **"failure_count": 0, "failure_rate": 0.0**  
+  Tidak ada pesan dengan performative `failure`, sehingga secara log tidak terlihat kegagalan protokol komunikasi.
+
+- **"reassign_count": 0**  
+  Tidak ada pesan dengan performative `reassign`, artinya tidak ada skenario pengalihan tugas yang tercatat.
+
+- **"recovery_time_after_failure_seconds": {"count": 0, ...}**  
+  Karena tidak ada `failure`, tidak ada recovery time yang bisa dihitung (semua nilai 0).
+
 ## Lisensi
 Gunakan sesuai kebutuhan akademik/tugas
 
