@@ -36,9 +36,9 @@ class ATM(Agent):
             msg.set_metadata("conversation-id", str(time.time()))
             await self.send_with_delay(msg)
             if status == "offline":
-                print("ATM1 | Status: OFFLINE (saldo di bawah threshold, penarikan nasabah dihentikan)")
+                print("ATM1 (internal): ATM1 mendeteksi saldo di bawah threshold, status OFFLINE (penarikan nasabah dihentikan)")
             elif status == "online":
-                print("ATM1 | Status: ONLINE (saldo di atas threshold, penarikan nasabah dibuka kembali)")
+                print("ATM1 (internal): ATM1 mendeteksi saldo di atas threshold, status ONLINE (penarikan nasabah dibuka kembali)")
 
         #Kirim permintaan refill bila saldo di bawah threshold dan belum ada permintaan berjalan
         async def request_refill_if_needed(self):
@@ -70,7 +70,7 @@ class ATM(Agent):
             m.set_metadata("performative", "request")
             m.set_metadata("conversation-id", conv_id)
             await self.send_with_delay(m)
-            print(f"ATM1 -> BANK1 | Saldo rendah, minta isi ulang: {needed_amount:,} (conv {conv_id})")
+            print(f"ATM1 → BANK1: request (informasi ketersediaan isi ulang {needed_amount:,}; conv_id={conv_id})")
 
         async def run(self):
             #cek saldo sebelum memproses pesan
@@ -86,11 +86,11 @@ class ATM(Agent):
 
             #Respon Bank dan opsi truk
             if sender == "bank1@localhost" and content.get("opsi"):
-                print(f"ATM1 <- BANK1 | Menerima opsi truk tersedia")
+                print("ATM1 ← BANK1: inform (daftar opsi truk tersedia)")
                 #Pilih truk yang tersedia
                 if content["opsi"] and len(content["opsi"]) > 0:
                     truck_info = content["opsi"][0]
-                    print(f"ATM1 | Memilih truk: {truck_info.get('truck_id')}")
+                    print(f"ATM1 (internal): memilih truk {truck_info.get('truck_id')}")
                     
                     #Gunakan jumlah yang sudah disimpan saat mengirim availability_inquiry
                     needed_amount = self.agent.pending_refill_amount
@@ -108,16 +108,16 @@ class ATM(Agent):
                     booking_msg.set_metadata("performative", "request")
                     booking_msg.set_metadata("conversation-id", conv)
                     await self.send_with_delay(booking_msg)
-                    print(f"ATM1 -> BANK1 | Mengirim booking request: {booking_req['jumlah']:,}")
+                    print(f"ATM1 → BANK1: request (pemesanan truk {booking_req['truck_id']} sejumlah {booking_req['jumlah']:,})")
 
             #Konfirmasi booking dari bank
             if sender == "bank1@localhost" and content.get("status") == "ok" and "sisa_kapasitas" in content:
-                print(f"ATM1 <- BANK1 | Menerima konfirmasi booking")
-                print(f"ATM1 | Booking berhasil, sisa kapasitas truk: {content['sisa_kapasitas']:,}")
+                print("ATM1 ← BANK1: confirm (hasil pemesanan truk berhasil)")
+                print(f"ATM1 (internal): booking truk berhasil, sisa kapasitas truk: {content['sisa_kapasitas']:,}")
 
             #Pengisian ulang dari TRUCK
             if sender == "truk1@localhost" and content.get("type") == "refill":
-                print(f"ATM1 <- TRUK1 | Menerima permintaan pengisian ulang")
+                print(f"ATM1 ← TRUK1: request (pengisian ulang ATM sebesar {content.get('jumlah', 0):,})")
                 refill_amount = content.get("jumlah", 0)
                 
                 # Cek apakah sudah mencapai batas maksimal pengisian ulang
@@ -142,26 +142,27 @@ class ATM(Agent):
                             await self.notify_nasabah("online")
                             self.agent.nasabah_notified_offline = False
 
-                        print(f"ATM1 | Menerima pengisian ulang: {actual_refill:,}")
-                        print(f"ATM1 | Saldo setelah diisi ulang: {self.agent.balance:,} (Pengisian ke-{self.agent.refill_count}/{self.agent.max_refills})")
+                        print(f"ATM1 (internal): menerima pengisian ulang {actual_refill:,}")
+                        print(f"ATM1 (internal): saldo setelah diisi ulang: {self.agent.balance:,} (pengisian ke-{self.agent.refill_count}/{self.agent.max_refills})")
                         
                         if actual_refill < refill_amount:
-                            print(f"ATM1 | Peringatan: Hanya bisa diisi {actual_refill:,} karena batas maksimal kapasitas {self.agent.max_capacity:,}")
+                            print(f"ATM1 (internal): peringatan, hanya bisa diisi {actual_refill:,} karena batas maksimal kapasitas {self.agent.max_capacity:,}")
                         
                         reply = {"status": "ok", "jumlah_diisi": actual_refill, "saldo_sekarang": self.agent.balance}
                     else:
-                        print(f"ATM1 -> TRUK1 | Pengisian ulang tidak diperlukan: saldo sudah mencapai maksimal")
+                        print("ATM1 → TRUK1: inform (pengisian ulang tidak diperlukan, saldo sudah maksimal)")
                         reply = {"status": "gagal", "alasan": "Saldo sudah mencapai kapasitas maksimal"}
                 
                 out = Message(to=str(msg.sender), body=json.dumps(reply))
                 out.set_metadata("performative", "inform")
                 out.set_metadata("conversation-id", conv)
                 await self.send_with_delay(out)
-                print(f"ATM1 -> TRUK1 | Konfirmasi pengisian ulang")
+                print("ATM1 → TRUK1: inform (konfirmasi hasil pengisian ulang ATM)")
 
             #Penarikan dari nasabah
             if content.get("type") == "withdraw":
                 amount = content["amount"]
+                print(f"ATM1 ← NASABAH1: request (tarik tunai {amount:,})")
 
                 if self.agent.balance >= amount:
                     self.agent.balance -= amount
@@ -175,13 +176,13 @@ class ATM(Agent):
                 await self.send_with_delay(out)
 
                 save_log(self.agent.jid, msg.sender, "inform", reply, conv)
-                print(f"ATM1 | Tarik {amount:,} | Saldo: {self.agent.balance:,}")
+                print(f"ATM1 → NASABAH1: inform (hasil tarik, saldo ATM sekarang {self.agent.balance:,})")
 
                 #Isi ulang
                 if self.agent.balance < self.agent.threshold:
                     # Hanya log info; permintaan refill dikelola proaktif oleh request_refill_if_needed
                     if self.agent.refill_count >= self.agent.max_refills:
-                        print(f"ATM1 | Saldo rendah tapi pengisian ulang sudah mencapai batas maksimal ({self.agent.max_refills}x)")
+                        print(f"ATM1 (internal): saldo rendah tapi pengisian ulang sudah mencapai batas maksimal ({self.agent.max_refills}x)")
                     else:
                         await self.request_refill_if_needed()
 

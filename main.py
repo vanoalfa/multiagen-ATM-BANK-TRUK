@@ -22,7 +22,7 @@ def load_withdrawal_amount(hari: str, waktu: str):
         (df["Time_of_Day"] == waktu)
     ]
 
-    total_uang = (filtered["Total_Withdrawals"] + filtered["Total_Deposits"]).sum()
+    total_uang = (filtered["Total_Withdrawals"]).sum()
 
     return int(total_uang / 6)
 

@@ -6,14 +6,10 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 LOG_PATH_DEFAULT = "logs/messages.log"
-TIME_FORMAT = "%y:%m:%d:%H:%M:%S"  # sesuai permintaan: YY:MM:DD:HH:Minutes:SS
+TIME_FORMAT = "%y:%m:%d:%H:%M:%S" 
 
 
 def parse_ts(ts_raw: Any) -> float:
-    """
-    Konversi timestamp string (YY:MM:DD:HH:MM:SS) ke epoch detik.
-    Jika sudah numerik, kembalikan langsung.
-    """
     try:
         if isinstance(ts_raw, (int, float)):
             return float(ts_raw)

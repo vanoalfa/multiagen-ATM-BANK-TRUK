@@ -24,8 +24,7 @@ class Nasabah1(Agent):
             msg.set_metadata("performative", "request")
             msg.set_metadata("conversation-id", str(time.time()))
             await self.send(msg)
-
-            print(f"NASABAH | Tarik {self.agent.withdraw_amount:,}")
+            print(f"NASABAH1 → ATM1: request (tarik tunai {self.agent.withdraw_amount:,})")
 
     class ControlBehaviour(CyclicBehaviour):
         async def run(self):

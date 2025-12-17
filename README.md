@@ -1,4 +1,4 @@
-# Sistem Multiagen ATM (TUGAS AKHIR)
+# Sistem Multiagen ATM (Tugas 1)
 
 Proyek ini mensimulasikan interaksi beberapa agen: ATM, Bank, Truk pengisi uang, dan Nasabah. Simulasi berjalan berbasis SPADE (XMPP) dan bisa dikonfigurasi lewat argumen terminal.
 
@@ -132,5 +132,4 @@ Penjelasan contoh hasil di atas:
 
 ## Lisensi
 Gunakan sesuai kebutuhan akademik/tugas
-
 
